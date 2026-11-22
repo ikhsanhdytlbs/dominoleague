@@ -1,0 +1,193 @@
+# Online tanpa server: GitHub Pages + Supabase
+
+Dengan cara ini tidak ada server yang perlu Anda sewa atau rawat.
+
+```
+HP / komputer pemain
+      │  membuka halaman                      │  memanggil API (HTTPS)
+      ▼                                       ▼
+ GitHub Pages                         Supabase Edge Function "api"
+ (tampilan statis)                    (semua aturan: PIN, pengesahan, paksa, FINAL, riwayat)
+                                              │
+                                              ▼
+                                      Supabase Postgres (data, sesi login, cadangan)
+```
+
+* **GitHub Pages** hanya menayangkan file tampilan (`index.html`, `app.js`, ...).
+* **Edge Function `api`** menjalankan aturan yang **sama persis** dengan `server.cjs` (kode bersama: `engine/engine.js`).
+* **Postgres** hanya menyimpan data. Tabelnya dikunci total: kunci "anon" yang terlihat di browser tidak bisa membaca atau menulis apa pun.
+
+Waktu yang dibutuhkan: sekitar 30 sampai 45 menit untuk kali pertama.
+
+---
+
+## 0. Yang perlu disiapkan
+
+* Akun **GitHub** dan akun **Supabase** (keduanya gratis).
+* Folder proyek ini di komputer Anda. Untuk Cara A di Langkah 3 juga butuh **Node.js 20+** terpasang.
+* Sebuah **kata sandi paksa** pilihan Anda (hanya untuk ketua liga).
+
+---
+
+## 1. Buat proyek Supabase
+
+1. Di supabase.com buat **New project**. Pilih region terdekat (mis. Singapore), catat **Database password**.
+2. Setelah jadi, catat **Project ref**: potongan acak di alamat `https://<PROJECT_REF>.supabase.co`.
+3. Alamat API Anda nantinya: `https://<PROJECT_REF>.supabase.co/functions/v1/api`
+
+## 2. Buat tabel
+
+1. Di Supabase buka **SQL Editor** > **New query**.
+2. Tempel seluruh isi `supabase/migrations/20260101000000_init.sql`, lalu **Run**.
+3. Buka **Table Editor**: harus ada 4 tabel (`league_state`, `league_backups`, `app_sessions`, `app_limits`) dan tiap tabel menunjukkan **RLS enabled**.
+
+File itu hanya membuat tabel dan menguncinya. Tidak ada logika di SQL.
+
+## 3. Deploy Edge Function
+
+Pilih salah satu.
+
+### Cara A: dari komputer Anda (Supabase CLI)
+
+```bash
+npm run sync                                        # menyalin file bersama ke supabase/functions/_shared
+npx supabase login
+npx supabase link --project-ref <PROJECT_REF>
+npx supabase functions deploy api --no-verify-jwt
+```
+
+### Cara B: otomatis dari GitHub (opsional)
+
+Setelah Langkah 4, isi di repo GitHub (**Settings > Secrets and variables > Actions**):
+
+* Secrets: `SUPABASE_ACCESS_TOKEN` (buat di Supabase: Account > Access Tokens) dan `SUPABASE_DB_PASSWORD`
+* Variable: `SUPABASE_PROJECT_REF`
+
+Lalu jalankan workflow **Deploy ke Supabase (opsional)** (tab Actions > Run workflow).
+
+> Editor fungsi di dashboard Supabase tidak cocok di sini karena fungsi kita memakai beberapa file. Pakai Cara A atau B.
+
+### Atur rahasia fungsi (wajib)
+
+```bash
+npx supabase secrets set FORCE_PASSWORD="kata-sandi-ketua-liga"
+npx supabase secrets set ALLOWED_ORIGIN="https://USERNAME.github.io"
+npx supabase secrets set INITIAL_DATA=real
+```
+
+(atau lewat dashboard: **Edge Functions > Secrets**)
+
+| Rahasia | Fungsi |
+|---|---|
+| `FORCE_PASSWORD` | Kata sandi untuk edit paksa, hapus sesi berisi game, reset PIN, unduh cadangan. Tanpa ini fitur-fitur itu mati. |
+| `ALLOWED_ORIGIN` | Alamat situs tampilan Anda **tanpa garis miring dan tanpa folder**, mis. `https://budi.github.io`. Browser dari situs lain akan diblokir. Pisahkan dengan koma bila lebih dari satu. |
+| `INITIAL_DATA` | `real` = mulai kosong (disarankan). Tanpa ini, instalasi baru dimulai dengan data contoh [DEMO]. |
+| `TIMEZONE` | Opsional, bawaan `Asia/Jakarta`. |
+
+Nama rahasia tidak boleh diawali `SUPABASE_` (dicadangkan Supabase). `SUPABASE_URL` dan `SUPABASE_SERVICE_ROLE_KEY` sudah tersedia otomatis di dalam fungsi. **Jangan pernah** menaruh kunci `service_role` di GitHub atau di `config.js`.
+
+## 4. Siapkan GitHub dan GitHub Pages
+
+1. Buat repositori baru di GitHub. Untuk akun gratis, GitHub Pages membutuhkan repositori **publik**. Itu aman karena tidak ada rahasia di dalam kodenya (rahasia ada di Supabase).
+2. Unggah seluruh folder proyek ke repositori itu (cabang `main`).
+3. **Settings > Pages > Build and deployment > Source: GitHub Actions**.
+4. **Settings > Secrets and variables > Actions > Variables > New repository variable**:
+   * `API_URL` = `https://<PROJECT_REF>.supabase.co/functions/v1/api`
+5. Buka tab **Actions** dan jalankan **Tayangkan tampilan ke GitHub Pages** (atau cukup push lagi).
+6. Alamat situs: `https://USERNAME.github.io/NAMA-REPO/`. Pastikan `ALLOWED_ORIGIN` di Langkah 3 sama dengan `https://USERNAME.github.io`.
+
+## 5. Periksa semuanya dengan smoke test
+
+Jalankan dari komputer Anda. Ini memeriksa deployment yang sebenarnya, termasuk bahwa database benar-benar terkunci:
+
+```bash
+node scripts/smoke-test.mjs https://<PROJECT_REF>.supabase.co/functions/v1/api \
+  --origin https://USERNAME.github.io \
+  --supabase-url https://<PROJECT_REF>.supabase.co --anon-key <ANON_KEY> \
+  --write
+```
+
+`<ANON_KEY>` ada di Supabase: **Project Settings > API** (kunci *anon/public*, bukan *service_role*).
+Semua baris harus **PASS**. Perhatikan khususnya baris `RLS: anon TIDAK bisa membaca/menulis`. Kalau ada yang **FAIL**, jangan dibuka ke pemain dulu.
+
+## 6. Pertama kali dipakai
+
+1. Buka situs, masuk dengan **PIN bawaan**: `0001` = pemain `PL01`, `0002` = `PL02`, dan seterusnya.
+2. **Segera** ubah PIN tiap pemain menjadi PIN sendiri (chip nama di kanan atas > Ubah PIN). Ingat: alamat situs publik, dan PIN bawaan mudah ditebak.
+3. Ubah nama pemain bawaan menjadi nama sebenarnya (Data Pemain > ✏️).
+4. Bila tadi tidak memakai `INITIAL_DATA=real` dan layar menampilkan data [DEMO]: **Pengaturan > Beralih ke Data Asli**.
+
+### Memindahkan data lama
+
+* Dari server Node lama: pakai **Pengaturan > Pulihkan dari File Cadangan** dan pilih file `database.json` (atau file cadangan hasil **Unduh Cadangan**). PIN semua pemain kembali ke PIN bawaan.
+* Dari browser versi sangat lama: aplikasi menawarkan impor otomatis saat pertama masuk.
+
+---
+
+## Cadangan (penting)
+
+Paket gratis Supabase tidak bisa diandalkan untuk cadangan otomatis (cek ketentuan terbaru di halaman resmi Supabase). Karena itu:
+
+1. **Cadangan dalam database:** tiap aksi penting (hapus paksa, finalisasi, reset, dst.) menyimpan salinan keadaan sebelumnya di tabel `league_backups` (40 terbaru).
+2. **Cadangan di luar Supabase (disarankan seminggu sekali):** **Pengaturan > Unduh Cadangan** (butuh kata sandi paksa), simpan file JSON-nya di Google Drive atau tempat lain.
+
+Memulihkan dari tabel `league_backups` (SQL Editor). Cari dulu nomornya, lalu pulihkan:
+
+```sql
+select id, taken_at, reason from public.league_backups order by id desc;
+
+update public.league_state s
+   set doc = b.doc, rev = s.rev + 1
+  from public.league_backups b
+ where b.id = 12 and s.id = 1;   -- ganti 12 dengan nomor cadangan pilihan Anda
+```
+
+Memulihkan dari file JSON: **Pengaturan > Pulihkan dari File Cadangan** (ketik FINAL).
+
+## Menjaga proyek tetap aktif
+
+Proyek gratis Supabase dijeda bila aktivitas database sangat sedikit selama seminggu. Workflow **Jaga proyek Supabase tetap aktif** memanggil `/ping` sekali sehari, dan itu menyentuh database. Itu membantu tetapi bukan jaminan mutlak. GitHub juga dapat menonaktifkan workflow terjadwal pada repositori yang lama tanpa aktivitas, jadi sesekali lihat tab Actions. Bila proyek terlanjur dijeda, buka dashboard Supabase dan **Restore**.
+
+## Batas paket gratis
+
+(Angka dari dokumentasi Supabase saat panduan ini ditulis; cek halaman resmi untuk yang terbaru.)
+
+* Edge Function: **500.000 pemanggilan per bulan**, batas CPU 2 detik per permintaan. Permintaan preflight CORS tidak dihitung.
+* Aplikasi memeriksa pembaruan tiap **15 detik** hanya saat tab terlihat. Lima HP terbuka empat jam seminggu kira-kira 20.000 pemanggilan per bulan. Tutup tab yang tidak dipakai.
+* Database gratis 500 MB, sangat lebih dari cukup untuk liga ini.
+
+## Keamanan: ringkasan
+
+* Database dikunci (RLS tanpa kebijakan + hak anon/authenticated dicabut). Hanya fungsi `api` yang bisa mengaksesnya. **Verifikasi dengan smoke test.**
+* Kata sandi paksa dan kunci `service_role` hanya ada di rahasia Supabase.
+* Semua halaman data butuh login PIN. PIN bawaan mudah ditebak, jadi minta semua pemain menggantinya.
+* Percobaan PIN salah dan kata sandi salah dibatasi per alamat IP. Bila Supabase tidak meneruskan IP asli pengunjung, semua orang berbagi satu batas: banyak PIN salah dari satu orang bisa menahan login semua orang selama beberapa menit. Bila ini terjadi, beri tahu saya.
+* Teks yang diketik pemain dibersihkan dari karakter `<` `>` `"` `` ` `` agar tidak ada kode yang bisa disisipkan.
+
+## Pemecahan masalah
+
+| Gejala | Penyebab umum |
+|---|---|
+| "Alamat API tidak ditemukan..." | `API_URL` salah, atau fungsi `api` belum di-deploy. Periksa variabel `API_URL` lalu jalankan ulang workflow Pages. |
+| "Tidak bisa menghubungi layanan API..." atau layar PIN tak bereaksi | `ALLOWED_ORIGIN` tidak sama dengan alamat situs (browser memblokir), atau tak ada internet. |
+| Galat 500 "Konfigurasi server belum lengkap" | Fungsi belum punya `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` (biasanya otomatis). Deploy ulang fungsinya. |
+| "Penyimpanan data tidak tersedia" / galat "Supabase: ..." | Tabel belum dibuat (Langkah 2), atau proyek sedang dijeda. |
+| Fitur paksa mati | `FORCE_PASSWORD` belum diatur sebagai rahasia fungsi. |
+| Semua orang diminta login ulang | Sesi 12 jam berakhir, atau data dipulihkan dari impor/reset. Normal. |
+
+## Menjalankan di komputer sendiri (tanpa Supabase)
+
+Cara lama tetap bisa: `npm start` (server Node, data di `database.json`). Aturannya identik karena memakai kode yang sama.
+
+## Menguji
+
+```bash
+npm test                 # seluruh uji: server Node DAN Edge Function (dengan database Supabase tiruan)
+bash test/e2e-browser.sh # uji di browser sungguhan, tampilan dan API di alamat berbeda (opsional: butuh playwright)
+```
+
+### Yang sudah dan belum diuji
+
+Sudah diuji otomatis: semua aturan (login PIN, pengesahan, paksa, FINAL, sesi, riwayat, cadangan) pada **kedua** target; penyimpanan Supabase terhadap tiruan PostgREST yang ketat; CORS dan alur lintas-alamat di Chromium; skrip smoke test.
+
+**Belum bisa diuji dari lingkungan pengembangan** (tidak ada Postgres, Deno, atau akses ke proyek Supabase Anda): menjalankan SQL di Postgres asli, perilaku runtime Edge Function asli, dan workflow GitHub Actions. Bagian ini sengaja dibuat sekecil mungkin dan sederhana, dan **smoke test di Langkah 5 adalah cara memverifikasinya di deployment Anda**. Kalau ada yang FAIL atau galat, kirimkan keluarannya kepada saya.

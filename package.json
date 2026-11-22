@@ -1,0 +1,17 @@
+{
+  "name": "domino-league",
+  "version": "1.0.0",
+  "description": "Domino League: aplikasi skor, klasemen, dan arsip (server Node atau Supabase + GitHub Pages)",
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node server.cjs",
+    "sync": "node scripts/sync-supabase.mjs",
+    "test": "node scripts/run-tests.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

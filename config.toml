@@ -1,0 +1,7 @@
+# Konfigurasi minimal Supabase CLI untuk Domino League.
+# Jika Anda sudah menjalankan `supabase init`, cukup pastikan bagian [functions.api] di bawah ada.
+project_id = "domino-league"
+
+# Fungsi "api" memakai PIN + sesi sendiri, bukan JWT Supabase, supaya preflight CORS dan login PIN berjalan.
+[functions.api]
+verify_jwt = false
