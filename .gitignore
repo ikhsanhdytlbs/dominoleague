@@ -1,0 +1,5 @@
+database.json
+database.json.tmp
+backups/
+config.local.json
+node_modules/
