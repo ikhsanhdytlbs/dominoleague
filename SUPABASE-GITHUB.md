@@ -204,6 +204,8 @@ Proyek gratis Supabase dijeda bila aktivitas database sangat sedikit selama semi
 | Galat 500 "Konfigurasi server belum lengkap" | Fungsi tidak menemukan `SUPABASE_URL` atau kunci rahasia Supabase (`SUPABASE_SECRET_KEYS` / `SUPABASE_SERVICE_ROLE_KEY`). Biasanya tersedia otomatis; deploy ulang fungsinya, dan pastikan proyek punya kunci rahasia (Project Settings > API Keys). |
 | "Penyimpanan data tidak tersedia" / galat "Supabase: ..." | Tabel belum dibuat (Langkah 2), atau proyek sedang dijeda. |
 | Fitur paksa mati | `FORCE_PASSWORD` belum diatur sebagai rahasia fungsi. |
+| Workflow deploy ✗ dengan pesan "Confirmation required ... Re-run with --yes" | Versi CLI terbaru meminta konfirmasi. Pakai file `deploy-supabase.yml` terbaru (baris terakhirnya memakai `--yes`). |
+| `npm run sync` error di Windows karena jalur aneh (`C:\C:\...`, `%20`) | Bug skrip versi lama pada folder yang namanya mengandung spasi. Sudah diperbaiki di versi terbaru. Selain itu `npm run sync` hanya perlu dijalankan **setelah Anda mengubah** file di `engine/`, `dominoLogic.js`, atau `demoData.js`; ZIP yang dibagikan sudah sinkron. |
 | Semua orang diminta login ulang | Sesi 12 jam berakhir, atau data dipulihkan dari impor/reset. Normal. |
 
 ## Menjalankan di komputer sendiri (tanpa Supabase)
