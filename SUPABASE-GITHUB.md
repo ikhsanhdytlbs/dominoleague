@@ -93,7 +93,7 @@ Tanpa terminal: di dashboard Supabase buka menu **Edge Functions**, lalu **Secre
 | `INITIAL_DATA` | `real` = mulai kosong (disarankan). Tanpa ini, instalasi baru dimulai dengan data contoh [DEMO]. |
 | `TIMEZONE` | Opsional, bawaan `Asia/Jakarta`. |
 
-Nama rahasia tidak boleh diawali `SUPABASE_` (dicadangkan Supabase). `SUPABASE_URL` dan `SUPABASE_SERVICE_ROLE_KEY` sudah tersedia otomatis di dalam fungsi. **Jangan pernah** menaruh kunci `service_role` di GitHub atau di `config.js`.
+Nama rahasia tidak boleh diawali `SUPABASE_` (dicadangkan Supabase). `SUPABASE_URL` dan kunci rahasia (`SUPABASE_SECRET_KEYS` untuk kunci format baru, atau `SUPABASE_SERVICE_ROLE_KEY` untuk format lama) sudah tersedia otomatis di dalam fungsi; kode kita membaca keduanya, jadi Anda tidak perlu mengatur apa pun untuk itu. **Jangan pernah** menaruh kunci `service_role` di GitHub atau di `config.js`.
 
 ## 4. Siapkan GitHub dan GitHub Pages
 
@@ -121,17 +121,25 @@ Kalau daftar workflow di kiri **kosong**, folder tersembunyi `.github` belum iku
 
 ## 5. Periksa semuanya dengan smoke test
 
-Jalankan dari komputer Anda. Ini memeriksa deployment yang sebenarnya, termasuk bahwa database benar-benar terkunci:
+Ini memeriksa deployment yang sebenarnya, termasuk bahwa database benar-benar terkunci. Kerjakan **setelah** fungsi ter-deploy (Langkah 3) dan `.../functions/v1/api/ping` menjawab `{"ok":true,...}`.
 
-```bash
-node scripts/smoke-test.mjs https://<PROJECT_REF>.supabase.co/functions/v1/api \
-  --origin https://USERNAME.github.io \
-  --supabase-url https://<PROJECT_REF>.supabase.co --anon-key <ANON_KEY> \
-  --write
+**Buka terminal yang benar.** Di Windows: tekan tombol Windows, ketik `cmd` (atau `PowerShell`), Enter. Ini jendela hitam/biru dengan alamat folder seperti `C:\Users\Nama>`. **Bukan** program "Node.js" (yang berawalan `>` dan menampilkan "Welcome to Node.js"): perintah di bawah akan error di sana.
+
+Masuk ke folder proyek yang sudah diekstrak, mis.:
+
+```
+cd C:\Users\NAMA\Downloads\domino-league
 ```
 
-`<ANON_KEY>` ada di Supabase: **Project Settings > API** (kunci *anon/public*, bukan *service_role*).
-Semua baris harus **PASS**. Perhatikan khususnya baris `RLS: anon TIDAK bisa membaca/menulis`. Kalau ada yang **FAIL**, jangan dibuka ke pemain dulu.
+Lalu jalankan **satu baris** ini (ganti nilainya; jangan pecah menjadi beberapa baris dan jangan pakai tanda `\`):
+
+```
+node scripts/smoke-test.mjs https://<PROJECT_REF>.supabase.co/functions/v1/api --origin https://USERNAME.github.io --supabase-url https://<PROJECT_REF>.supabase.co --anon-key <KUNCI_PUBLISHABLE> --write
+```
+
+`<KUNCI_PUBLISHABLE>` ada di Supabase: **Project Settings > API Keys**, kunci berawalan `sb_publishable_` (kunci lama bernama *anon* juga bisa). Kunci ini memang publik dan aman dipakai di sini. **Jangan pernah** memakai atau membagikan kunci `sb_secret_` / `service_role`.
+
+Semua baris harus **PASS**. Perhatikan khususnya baris `RLS: kunci publik TIDAK bisa membaca/menulis`. Kalau ada yang **FAIL**, jangan dibuka ke pemain dulu. Untuk keluar dari jendela Node.js yang terlanjur terbuka, ketik `.exit` lalu Enter.
 
 ## 6. Pertama kali dipakai
 
@@ -193,7 +201,7 @@ Proyek gratis Supabase dijeda bila aktivitas database sangat sedikit selama semi
 |---|---|
 | "Alamat API tidak ditemukan..." | `API_URL` salah, atau fungsi `api` belum di-deploy. Periksa variabel `API_URL` lalu jalankan ulang workflow Pages. |
 | "Tidak bisa menghubungi layanan API..." atau layar PIN tak bereaksi | `ALLOWED_ORIGIN` tidak sama dengan alamat situs (browser memblokir), atau tak ada internet. |
-| Galat 500 "Konfigurasi server belum lengkap" | Fungsi belum punya `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` (biasanya otomatis). Deploy ulang fungsinya. |
+| Galat 500 "Konfigurasi server belum lengkap" | Fungsi tidak menemukan `SUPABASE_URL` atau kunci rahasia Supabase (`SUPABASE_SECRET_KEYS` / `SUPABASE_SERVICE_ROLE_KEY`). Biasanya tersedia otomatis; deploy ulang fungsinya, dan pastikan proyek punya kunci rahasia (Project Settings > API Keys). |
 | "Penyimpanan data tidak tersedia" / galat "Supabase: ..." | Tabel belum dibuat (Langkah 2), atau proyek sedang dijeda. |
 | Fitur paksa mati | `FORCE_PASSWORD` belum diatur sebagai rahasia fungsi. |
 | Semua orang diminta login ulang | Sesi 12 jam berakhir, atau data dipulihkan dari impor/reset. Normal. |
