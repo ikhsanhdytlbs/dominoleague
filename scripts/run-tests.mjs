@@ -2,7 +2,8 @@
 // Pemakaian: npm test
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-const root = path.resolve(new URL('..', import.meta.url).pathname);
+import { fileURLToPath } from 'node:url';
+const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const files = ['mvp', 'server', 'sessions', 'initial-data', 'client-login', 'client-features', 'keys'];
 let failed = 0;
 const sync = spawnSync('node', ['scripts/sync-supabase.mjs', '--check'], { cwd: root, encoding: 'utf8' });

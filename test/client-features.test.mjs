@@ -1,4 +1,5 @@
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { target, ROOT } from './helpers.mjs';
 import { calculateDailyMVP, pickMvpDate, matchDay } from '../dominoLogic.js';
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'dlc3-'));
@@ -15,7 +16,7 @@ const mkStore = () => { const s = {}; return { getItem: k => s[k] ?? null, setIt
 globalThis.localStorage = mkStore(); globalThis.sessionStorage = mkStore();
 let alerts = [], confirms = []; globalThis.alert = m => alerts.push(String(m)); globalThis.confirm = m => { confirms.push(String(m)); return true; };
 globalThis.setInterval = () => 0;
-await import(ROOT + '/app.js');
+await import(pathToFileURL(path.join(ROOT, 'app.js')).href);
 await new Promise(r => setTimeout(r, 300));
 const app = window.app;
 let ok = 0, bad = 0;

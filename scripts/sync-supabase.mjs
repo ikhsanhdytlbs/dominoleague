@@ -3,7 +3,8 @@
 //           node scripts/sync-supabase.mjs --check  -> hanya memeriksa (gagal bila ada yang berbeda)
 import fs from 'node:fs';
 import path from 'node:path';
-const root = path.resolve(new URL('..', import.meta.url).pathname);
+import { fileURLToPath } from 'node:url';
+const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const target = path.join(root, 'supabase', 'functions', '_shared');
 const files = ['engine/engine.js', 'engine/store-supabase.js', 'dominoLogic.js', 'demoData.js'];
 const check = process.argv.includes('--check');

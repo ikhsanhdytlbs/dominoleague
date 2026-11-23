@@ -3,8 +3,9 @@
 //   TARGET=edge         : Edge Function + tiruan PostgREST -> data di "Supabase"
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const ROOT = path.resolve(new URL('..', import.meta.url).pathname);
+export const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 export const TARGET = process.env.TARGET === 'edge' ? 'edge' : 'node';
 const children = [];
 process.on('exit', () => children.forEach(c => { try { c.kill(); } catch (_) { /* abaikan */ } }));

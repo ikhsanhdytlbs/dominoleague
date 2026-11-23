@@ -1,10 +1,10 @@
 // Menjalankan Edge Function (supabase/functions/api/index.ts) sebagai server HTTP biasa di Node,
 // supaya bisa diuji dengan suite yang sama. Datanya ada di tiruan PostgREST (MOCK_URL).
 import http from 'node:http';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-const root = path.resolve(new URL('..', import.meta.url).pathname);
+const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const { handler } = await import(pathToFileURL(path.join(root, 'supabase', 'functions', 'api', 'index.ts')).href);
 const PORT = Number(process.env.PORT || 4000);
 
