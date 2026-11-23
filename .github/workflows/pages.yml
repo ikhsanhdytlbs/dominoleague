@@ -1,0 +1,48 @@
+name: Tayangkan tampilan ke GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Susun folder situs (hanya file tampilan)
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          mkdir _site
+          cp index.html app.js dominoLogic.js demoData.js favicon.svg google-apps-script.js _site/
+          touch _site/.nojekyll
+          if [ -n "$API_URL" ]; then
+            printf 'window.DOMINO_CONFIG = { API_URL: %s };\n' "$(printf '%s' "$API_URL" | jq -Rs .)" > _site/config.js
+          else
+            cp config.example.js _site/config.js
+            echo "::warning::Variabel repositori API_URL belum diisi. Situs tampil tetapi belum terhubung ke Supabase."
+          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
