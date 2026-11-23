@@ -1,3 +1,7 @@
+# OPSIONAL: men-deploy Edge Function "api" ke Supabase dari GitHub (tanpa terminal di komputer Anda).
+# Hanya butuh:  Secret SUPABASE_ACCESS_TOKEN  dan  Variable SUPABASE_PROJECT_REF  (di Settings repositori > Secrets and variables > Actions).
+# Dilewati otomatis bila SUPABASE_PROJECT_REF belum diisi. Bisa dijalankan manual (tab Actions > Run workflow).
+# Tabel dibuat sekali lewat SQL Editor Supabase (lihat SUPABASE-GITHUB.md Langkah 2), bukan lewat workflow ini.
 name: Deploy fungsi ke Supabase (opsional)
 
 on:

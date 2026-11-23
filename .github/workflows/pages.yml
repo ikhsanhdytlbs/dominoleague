@@ -1,3 +1,5 @@
+# Menayangkan TAMPILAN (file statis) ke GitHub Pages. Data & aturan ada di Supabase, bukan di sini.
+# Prasyarat: Settings > Pages > Source = "GitHub Actions", dan variabel repositori API_URL (Settings > Secrets and variables > Actions > Variables).
 name: Tayangkan tampilan ke GitHub Pages
 
 on:
