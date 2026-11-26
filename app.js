@@ -1,5 +1,5 @@
 // DOMINO LEAGUE - Main Application Logic & UI Controller
-// Palet Warna: Domino Kartu Gaple Indonesia (Kuning Kartu, Merah Balak/Titik, Biru ACBC, Hitam Arang)
+// Palet Warna: Domino Kartu Domino Indonesia (Kuning Kartu, Merah Balak/Titik, Biru ACBC, Hitam Arang)
 import { 
   DEFAULT_PLAYERS, 
   DEFAULT_SETTINGS, 
@@ -10,7 +10,9 @@ import {
   calculateHeadToHead,
   calculateDailyMVP,
   pickMvpDate,
-  matchDay
+  matchDay,
+  groupActivityByLocation,
+  leaderTrend
 } from './dominoLogic.js';
 import { DEMO_DATA } from './demoData.js';
 
@@ -849,6 +851,7 @@ class DominoLeagueApp {
       btn.addEventListener('click', (e) => {
         const tab = e.currentTarget.getAttribute('data-tab');
         this.switchTab(tab);
+        this.closeSidebarOnMobile();
       });
     });
 
@@ -865,6 +868,60 @@ class DominoLeagueApp {
         this.closeModal();
       }
     });
+
+    // Menu samping: tombol panah di menu, tombol ☰ di header, Esc, dan penyesuaian saat layar berubah ukuran
+    const arrow = document.getElementById('btn-toggle-menu');
+    if (arrow) arrow.addEventListener('click', () => this.toggleSidebar());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.closeSidebar(); });
+    window.addEventListener('resize', () => { if (!this.isMobileLayout()) this.closeSidebar(); this.setMenuAria(); });
+    this.restoreSidebarState();
+  }
+
+  // ---------- Menu samping (laci geser di HP, bisa disembunyikan di layar lebar) ----------
+  isMobileLayout() {
+    return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;
+  }
+
+  setMenuAria() {
+    const b = document.body;
+    if (!b || !b.classList) return;
+    const open = this.isMobileLayout() ? b.classList.contains('menu-open') : !b.classList.contains('menu-collapsed');
+    ['btn-open-menu', 'btn-toggle-menu'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.setAttribute) el.setAttribute('aria-expanded', String(open));
+    });
+  }
+
+  toggleSidebar() {
+    const b = document.body;
+    if (!b || !b.classList) return;
+    if (this.isMobileLayout()) {
+      b.classList.toggle('menu-open');
+    } else {
+      const collapsed = b.classList.toggle('menu-collapsed');
+      try { localStorage.setItem('domino_menu_collapsed', collapsed ? '1' : '0'); } catch (e) { /* abaikan */ }
+    }
+    this.setMenuAria();
+  }
+
+  closeSidebar() {
+    const b = document.body;
+    if (!b || !b.classList) return;
+    b.classList.remove('menu-open');
+    this.setMenuAria();
+  }
+
+  closeSidebarOnMobile() {
+    if (this.isMobileLayout()) this.closeSidebar();
+  }
+
+  restoreSidebarState() {
+    const b = document.body;
+    if (!b || !b.classList) return;
+    try {
+      if (!this.isMobileLayout() && localStorage.getItem('domino_menu_collapsed') === '1') b.classList.add('menu-collapsed');
+    } catch (e) { /* abaikan */ }
+    this.setMenuAria();
   }
 
   switchTab(tabName) {
@@ -994,26 +1051,103 @@ class DominoLeagueApp {
     if (!container) return;
 
     const totalGames = calc.totalSeasonMatches;
-    const topLeader = calc.stats.find(p => p.eligible_champion) || calc.stats[0] || { display_name: '-', performance_index: 0, s100_rate: 0, s1000_rate: 0, loss_rate: 0 };
-    
-    const avgS100Rate = calc.stats.length > 0 ? (calc.stats.reduce((acc, p) => acc + p.s100_rate, 0) / calc.stats.length).toFixed(0) : 0;
-    const avgS1000Rate = calc.stats.length > 0 ? (calc.stats.reduce((acc, p) => acc + p.s1000_rate, 0) / calc.stats.length).toFixed(0) : 0;
-    const lossControlRate = (100 - (calc.stats.length > 0 ? (calc.stats.reduce((acc, p) => acc + p.loss_rate, 0) / calc.stats.length) : 0)).toFixed(0);
+    const sid = this.state.current_season_id;
+    const settings = this.state.settings || {};
+    const minG = settings.min_games_champion || 10;
 
-    const currentSessions = this.state.sessions.filter(s => s.season_id === this.state.current_season_id).slice(-7);
-    const maxSessionGames = Math.max(1, ...currentSessions.map(s => this.state.matches.filter(m => m.session_id === s.session_id).length));
+    // ---- Kartu Aktivitas: jumlah batang mengikuti data (per tempat nongkrong) ----
+    const seasonSessions = this.state.sessions.filter(x => x.season_id === sid);
+    const act = groupActivityByLocation(seasonSessions, this.state.matches, 7);
+    const maxBarGames = Math.max(1, ...act.bars.map(b => b.games));
+
+    // ---- Kartu Dominasi Klasemen: murni dari data, tanpa angka contoh ----
+    const eligibleList = calc.stats.filter(p => p.eligible_champion);
+    let dom;
+    if (totalGames === 0) dom = { kind: 'empty', leader: null };
+    else if (eligibleList.length === 0) dom = { kind: 'progress', leader: null, top: [...calc.stats].sort((a, b) => b.total_matches - a.total_matches)[0] };
+    else if (eligibleList.length === 1) dom = { kind: 'single', leader: eligibleList[0] };
+    else dom = { kind: 'ranked', leader: eligibleList[0] };
+    const leader = dom.leader;
+    const trend = dom.kind === 'ranked'
+      ? leaderTrend(sid, leader.player_id, this.state.players, this.state.sessions, this.state.matches, this.state.loss_events, this.state.special_events, settings, 7)
+      : [];
+    const plotted = trend.filter(pt => pt.pi !== null);
+    const domPi = dom.kind === 'ranked' ? `${leader.performance_index.toFixed(1)}%` : '—';
+    const domSub = dom.kind === 'empty' ? 'Belum ada game di season ini'
+      : dom.kind === 'progress' ? `${this.esc(dom.top.display_name)} baru ${dom.top.total_matches} dari ${minG} game (syarat juara)`
+      : dom.kind === 'single' ? `${this.esc(leader.display_name)} satu-satunya yang memenuhi syarat, belum ada pembanding`
+      : `${this.esc(leader.display_name)} memegang skor tertinggi`;
+    const domPct = v => (leader ? `${Math.round(v)}%` : '—');
+    const domW = v => (leader ? Math.max(0, Math.min(100, v)) : 0);
+    const domLossCtl = leader ? Math.max(0, 100 - leader.loss_rate) : 0;
+    let domChart = '';
+    let domAxis = '';
+    if (plotted.length >= 2) {
+      const W = 300, H = 80, PAD = 8, n = trend.length;
+      const xAt = i => (n === 1 ? W / 2 : (i * W) / (n - 1));
+      const yAt = v => H - PAD - (Math.max(0, Math.min(100, v)) / 100) * (H - 2 * PAD);
+      const pts = trend.map((pt, i) => (pt.pi === null ? null : [xAt(i), yAt(pt.pi)])).filter(Boolean);
+      const line = pts.map((q, i) => `${i ? 'L' : 'M'} ${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join(' ');
+      const area = `${line} L ${pts[pts.length - 1][0].toFixed(1)} ${H} L ${pts[0][0].toFixed(1)} ${H} Z`;
+      const lastPct = Math.min(88, Math.max(12, (pts[pts.length - 1][0] / W) * 100));
+      domChart = `
+            <div class="relative mt-4 h-24">
+              <div class="absolute -top-2 transform -translate-x-1/2 z-10" style="left: ${lastPct.toFixed(1)}%">
+                <span class="px-2.5 py-1 rounded-xl bg-domino-red text-white text-[11px] font-black shadow-pill flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-domino-yellow"></span>
+                  <span>PI: ${leader.performance_index}</span>
+                </span>
+                <div class="w-2 h-2 bg-amber-400 rounded-full border-2 border-white mx-auto mt-0.5 shadow-sm"></div>
+              </div>
+              <svg viewBox="0 0 ${W} ${H}" class="w-full h-full overflow-visible" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="dominoWaveGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#FACC15" stop-opacity="0.45"/>
+                    <stop offset="100%" stop-color="#FACC15" stop-opacity="0.0"/>
+                  </linearGradient>
+                </defs>
+                <path d="${area}" fill="url(#dominoWaveGradient)"></path>
+                <path d="${line}" fill="none" stroke="#EAB308" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+              </svg>
+            </div>`;
+      domAxis = `
+          <div class="flex justify-between text-[11px] font-black text-amber-900/60 pt-2 border-t border-amber-100">
+            ${trend.map(pt => `<span title="${this.attr(pt.label)}">${pt.date ? `${pt.date.slice(8, 10)}/${pt.date.slice(5, 7)}` : '·'}</span>`).join('')}
+          </div>`;
+    } else {
+      const msg = dom.kind === 'empty' ? 'Grafik muncul setelah ada game'
+        : dom.kind === 'progress' ? `Grafik muncul setelah ada pemain yang memenuhi syarat (min. ${minG} game)`
+        : dom.kind === 'single' ? 'Grafik muncul setelah ada pembanding (min. 2 pemain memenuhi syarat)'
+        : 'Grafik tren muncul setelah beberapa sesi';
+      domChart = `
+            <div class="relative mt-4 h-24 flex items-center justify-center rounded-2xl border border-dashed border-amber-200 bg-amber-50/40">
+              <p class="text-[11px] font-bold text-amber-800/70 text-center px-4">${msg}</p>
+            </div>`;
+    }
+
+    // ---- Kartu Rasio: rata-rata pemain yang sudah bermain (— bila belum ada game) ----
+    const played = calc.stats.filter(pl => pl.total_matches > 0);
+    const avgOf = k => (played.length ? played.reduce((a, pl) => a + pl[k], 0) / played.length : null);
+    const ringVal = v => (v === null ? 0 : Math.max(0, Math.min(100, v)));
+    const ringLabel = v => (v === null ? '—' : `${Math.round(v)}%`);
+    const aS100 = avgOf('s100_rate'), aS1000 = avgOf('s1000_rate'), aLoss = avgOf('loss_rate');
+    const aLossCtl = aLoss === null ? null : Math.max(0, 100 - aLoss);
+    const avgS100Rate = ringVal(aS100).toFixed(0), avgS100Label = ringLabel(aS100);
+    const avgS1000Rate = ringVal(aS1000).toFixed(0), avgS1000Label = ringLabel(aS1000);
+    const lossControlRate = ringVal(aLossCtl).toFixed(0), lossControlLabel = ringLabel(aLossCtl);
+
     const recentMatches = [...calc.seasonMatches].reverse().slice(0, 5);
 
     container.innerHTML = `
       <!-- GRID ROW 1: Bar Chart (Aktivitas Sesi) + Wave Chart (Dominasi Performa) -->
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
         
-        <!-- CARD 1: AKTIVITAS SESI (Grafik Batang ala Kartu Domino Kuning & Merah) -->
+        <!-- CARD 1: AKTIVITAS (batang per tempat nongkrong; jumlahnya mengikuti data) -->
         <div class="lg:col-span-7 bg-white rounded-[26px] p-6 shadow-card border border-domino-border flex flex-col justify-between">
           <div class="flex items-center justify-between mb-6">
             <div>
-              <h3 class="font-black text-lg text-domino-black tracking-tight">Aktivitas Sesi Nongkrong</h3>
-              <p class="text-xs text-amber-800/80 mt-0.5">Jumlah game yang dimainkan per sesi duduk</p>
+              <h3 class="font-black text-lg text-domino-black tracking-tight">${act.mode === 'location' ? 'Aktivitas Tempat Nongkrong' : 'Aktivitas Sesi Nongkrong'}</h3>
+              <p class="text-xs text-amber-800/80 mt-0.5">${act.mode === 'location' ? 'Jumlah game per lokasi nongkrong' : 'Jumlah game per sesi duduk. Isi lokasi pada sesi agar dikelompokkan per tempat'}</p>
             </div>
             <div class="flex items-baseline gap-1 bg-amber-50 px-3 py-1 rounded-xl border border-amber-200">
               <span class="text-xl font-black text-domino-red">${totalGames}</span>
@@ -1021,107 +1155,77 @@ class DominoLeagueApp {
             </div>
           </div>
 
-          <!-- Vertical Domino Pill Bars -->
-          <div class="grid grid-cols-7 gap-2.5 sm:gap-3 items-end h-44 pt-4 pb-2">
-            ${[0, 1, 2, 3, 4, 5, 6].map(idx => {
-              const session = currentSessions[idx];
-              const sMatches = session ? this.state.matches.filter(m => m.session_id === session.session_id).length : 0;
-              const fillPct = session ? Math.max(18, Math.round((sMatches / maxSessionGames) * 100)) : 0;
-              const label = session ? `S${idx+1}` : `S${idx+1}`;
-              const timeVal = session ? `${sMatches} gm` : '0';
-              const isToday = session && session.status === 'active';
-
+          ${act.bars.length === 0 ? `
+          <div class="h-44 flex items-center justify-center rounded-2xl border border-dashed border-amber-200 bg-amber-50/40">
+            <p class="text-xs font-bold text-amber-800/70">Belum ada sesi di season ini</p>
+          </div>` : `
+          <div style="display: grid; grid-template-columns: repeat(${act.bars.length}, minmax(0, 1fr));" class="gap-2.5 sm:gap-3 items-end h-44 pt-4 pb-2">
+            ${act.bars.map(b => {
+              const fillPct = b.games > 0 ? Math.max(18, Math.round((b.games / maxBarGames) * 100)) : 0;
+              const barW = act.bars.length <= 3 ? 64 : 40;
               return `
-                <div class="flex flex-col items-center h-full justify-end group">
-                  <span class="text-[10px] font-black ${isToday ? 'text-domino-red' : 'text-amber-800'} mb-1.5">${timeVal}</span>
-                  <div class="w-full max-w-[40px] h-32 bg-domino-yellowLight rounded-2xl p-1 flex flex-col justify-end border border-amber-200/80 transition-all group-hover:bg-amber-100">
-                    <div style="height: ${fillPct}%" class="w-full ${isToday ? 'bg-gradient-to-t from-domino-red to-rose-500 shadow-pill' : 'bg-domino-yellowDark'} rounded-xl transition-all duration-500 relative flex items-center justify-center">
-                      <!-- Mini Pip Dot in Bar -->
-                      ${isToday ? '<span class="w-1.5 h-1.5 bg-white rounded-full"></span>' : '<span class="w-1.5 h-1.5 bg-domino-red rounded-full"></span>'}
+                <div class="flex flex-col items-center h-full justify-end group min-w-0" title="${this.attr(b.label)}: ${b.games} game dalam ${b.sessions} sesi">
+                  <span class="text-[10px] font-black ${b.active ? 'text-domino-red' : 'text-amber-800'} mb-1.5">${b.games} gm</span>
+                  <div style="max-width: ${barW}px" class="w-full h-32 bg-domino-yellowLight rounded-2xl p-1 flex flex-col justify-end border border-amber-200/80 transition-all group-hover:bg-amber-100">
+                    <div style="height: ${fillPct}%" class="w-full ${b.active ? 'bg-gradient-to-t from-domino-red to-rose-500 shadow-pill' : 'bg-domino-yellowDark'} rounded-xl transition-all duration-500 flex items-start justify-center pt-1.5 min-h-[6px]">
+                      ${b.games > 0 ? `<span class="w-1.5 h-1.5 ${b.active ? 'bg-white' : 'bg-domino-red'} rounded-full"></span>` : ''}
                     </div>
                   </div>
-                  <span class="text-xs font-black ${isToday ? 'text-domino-red' : 'text-slate-600'} mt-2">${session ? (session.session_label ? session.session_label.substring(0, 3) : label) : label}</span>
-                </div>
-              `;
+                  <span class="text-xs font-black ${b.active ? 'text-domino-red' : 'text-slate-600'} mt-2 w-full text-center truncate">${this.esc(b.label)}</span>
+                </div>`;
             }).join('')}
           </div>
+          ${act.total > act.bars.length ? `<p class="text-[10px] text-amber-800/70 mt-1">Menampilkan ${act.bars.length} dari ${act.total} yang terbaru</p>` : ''}`}
         </div>
 
-        <!-- CARD 2: DOMINASI KLASEMEN (Merah Balak & Biru ACBC Accent) -->
+        <!-- CARD 2: DOMINASI KLASEMEN (murni dari data) -->
         <div class="lg:col-span-5 bg-white rounded-[26px] p-6 shadow-card border border-domino-border flex flex-col justify-between">
           <div>
             <div class="flex items-start justify-between">
               <div>
                 <span class="text-[10px] font-black text-amber-800 uppercase tracking-widest block">Dominasi Klasemen</span>
                 <div class="flex items-baseline gap-2 mt-1">
-                  <h3 class="text-3xl font-black text-domino-black">${topLeader.performance_index || 91.7}%</h3>
-                  <span class="text-xs font-black text-domino-red px-2 py-0.5 bg-rose-50 rounded-full border border-rose-200">#1 Top</span>
+                  <h3 class="text-3xl font-black text-domino-black">${domPi}</h3>
+                  ${dom.kind === 'ranked' ? '<span class="text-xs font-black text-domino-red px-2 py-0.5 bg-rose-50 rounded-full border border-rose-200">#1 Top</span>' : ''}
                 </div>
-                <p class="text-xs text-slate-500 font-medium mt-0.5">${topLeader.display_name} memegang skor tertinggi</p>
+                <p class="text-xs text-slate-500 font-medium mt-0.5">${domSub}</p>
               </div>
 
-              <!-- Mini Progress Bars with Domino Colors -->
               <div class="w-36 space-y-2">
                 <div>
                   <div class="flex justify-between text-[10px] font-black text-slate-600 mb-0.5">
                     <span>Ratus Rate</span>
-                    <span class="text-domino-red font-black">${topLeader.s100_rate || 54}%</span>
+                    <span class="text-domino-red font-black">${leader ? domPct(leader.s100_rate) : '—'}</span>
                   </div>
                   <div class="w-full h-1.5 bg-amber-100 rounded-full overflow-hidden">
-                    <div style="width: ${topLeader.s100_rate || 54}%" class="h-full bg-domino-red rounded-full"></div>
+                    <div style="width: ${leader ? domW(leader.s100_rate) : 0}%" class="h-full bg-domino-red rounded-full"></div>
                   </div>
                 </div>
 
                 <div>
                   <div class="flex justify-between text-[10px] font-black text-slate-600 mb-0.5">
                     <span>Ribu Rate</span>
-                    <span class="text-domino-blue font-black">${topLeader.s1000_rate || 84}%</span>
+                    <span class="text-domino-blue font-black">${leader ? domPct(leader.s1000_rate) : '—'}</span>
                   </div>
                   <div class="w-full h-1.5 bg-amber-100 rounded-full overflow-hidden">
-                    <div style="width: ${topLeader.s1000_rate || 84}%" class="h-full bg-domino-blue rounded-full"></div>
+                    <div style="width: ${leader ? domW(leader.s1000_rate) : 0}%" class="h-full bg-domino-blue rounded-full"></div>
                   </div>
                 </div>
 
                 <div>
                   <div class="flex justify-between text-[10px] font-black text-slate-600 mb-0.5">
                     <span>Loss Control</span>
-                    <span class="text-amber-600 font-black">${(100 - (topLeader.loss_rate || 22)).toFixed(0)}%</span>
+                    <span class="text-amber-600 font-black">${leader ? domPct(domLossCtl) : '—'}</span>
                   </div>
                   <div class="w-full h-1.5 bg-amber-100 rounded-full overflow-hidden">
-                    <div style="width: ${(100 - (topLeader.loss_rate || 22)).toFixed(0)}%" class="h-full bg-amber-500 rounded-full"></div>
+                    <div style="width: ${leader ? domW(domLossCtl) : 0}%" class="h-full bg-amber-500 rounded-full"></div>
                   </div>
                 </div>
               </div>
             </div>
-
-            <!-- Wave Spline SVG Chart with Floating Red Domino Pill Badge -->
-            <div class="relative mt-4 h-24">
-              <!-- Floating Red Pill Badge -->
-              <div class="absolute left-[60%] -top-2 transform -translate-x-1/2 z-10">
-                <span class="px-2.5 py-1 rounded-xl bg-domino-red text-white text-[11px] font-black shadow-pill flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full bg-domino-yellow"></span>
-                  <span>PI: ${topLeader.performance_index || 91.7}</span>
-                </span>
-                <div class="w-2 h-2 bg-amber-400 rounded-full border-2 border-white mx-auto mt-0.5 shadow-sm"></div>
-              </div>
-
-              <!-- SVG Spline Wave in Golden Yellow Gradient -->
-              <svg viewBox="0 0 300 80" class="w-full h-full overflow-visible" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="dominoWaveGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#FACC15" stop-opacity="0.45"/>
-                    <stop offset="100%" stop-color="#FACC15" stop-opacity="0.0"/>
-                  </linearGradient>
-                </defs>
-                <path d="M 0 60 C 40 70, 60 20, 100 45 C 140 70, 160 10, 200 30 C 240 50, 260 15, 300 35 L 300 80 L 0 80 Z" fill="url(#dominoWaveGradient)"></path>
-                <path d="M 0 60 C 40 70, 60 20, 100 45 C 140 70, 160 10, 200 30 C 240 50, 260 15, 300 35" fill="none" stroke="#EAB308" stroke-width="3" stroke-linecap="round"></path>
-              </svg>
-            </div>
+${domChart}
           </div>
-
-          <div class="flex justify-between text-[11px] font-black text-amber-900/60 pt-2 border-t border-amber-100">
-            <span>S1</span><span>S2</span><span>S3</span><span>S4</span><span>S5</span><span>S6</span><span>S7</span>
-          </div>
+${domAxis}
         </div>
 
       </div>
@@ -1235,7 +1339,7 @@ class DominoLeagueApp {
                     <path class="text-amber-100" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                     <path class="text-domino-red" stroke-width="3.5" stroke-dasharray="${avgS100Rate}, 100" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                   </svg>
-                  <span class="absolute font-black text-xs text-domino-black">${avgS100Rate}%</span>
+                  <span class="absolute font-black text-xs text-domino-black">${avgS100Label}</span>
                 </div>
                 <span class="text-[11px] font-black text-domino-red mt-2">Ratus Rate</span>
               </div>
@@ -1247,7 +1351,7 @@ class DominoLeagueApp {
                     <path class="text-amber-100" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                     <path class="text-domino-blue" stroke-width="3.5" stroke-dasharray="${avgS1000Rate}, 100" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                   </svg>
-                  <span class="absolute font-black text-xs text-domino-black">${avgS1000Rate}%</span>
+                  <span class="absolute font-black text-xs text-domino-black">${avgS1000Label}</span>
                 </div>
                 <span class="text-[11px] font-black text-domino-blue mt-2">Ribu Rate</span>
               </div>
@@ -1259,7 +1363,7 @@ class DominoLeagueApp {
                     <path class="text-amber-100" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                     <path class="text-amber-500" stroke-width="3.5" stroke-dasharray="${lossControlRate}, 100" stroke-linecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                   </svg>
-                  <span class="absolute font-black text-xs text-domino-black">${lossControlRate}%</span>
+                  <span class="absolute font-black text-xs text-domino-black">${lossControlLabel}</span>
                 </div>
                 <span class="text-[11px] font-black text-amber-700 mt-2">Loss Control</span>
               </div>
@@ -1294,7 +1398,7 @@ class DominoLeagueApp {
               </div>
 
               <div class="mt-4 pt-2 border-t border-stone-800 flex items-center justify-between text-[10px] text-amber-300">
-                <span>Gaple League</span>
+                <span>Domino League</span>
                 <span class="text-domino-yellow font-bold">100% Valid</span>
               </div>
             </div>
@@ -1401,7 +1505,7 @@ class DominoLeagueApp {
                         <span>${this.esc(session.session_label || 'Sesi Tanpa Judul')}</span>
                         ${isActive ? '<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">🟢 AKTIF</span>' : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">🔒 DITUTUP</span>'}
                       </h4>
-                      <p class="text-xs text-amber-800/80 font-medium">Tanggal: ${session.session_date}</p>
+                      <p class="text-xs text-amber-800/80 font-medium">Tanggal: ${session.session_date}${session.location ? ' · 📍 ' + this.esc(session.location) : ''}</p>
                     </div>
                   </div>
 
@@ -1780,6 +1884,12 @@ class DominoLeagueApp {
               <input type="text" id="new-ses-label" placeholder="Contoh: Malam Minggu Warkop Sabar" class="w-full bg-white border border-amber-200 rounded-xl p-2.5 text-xs text-domino-black font-semibold">
             </div>
             <div class="mb-4">
+              <label class="block text-xs font-black text-amber-950 mb-1">Lokasi / Tempat Nongkrong</label>
+              <input type="text" id="new-ses-location" list="location-options" maxlength="60" placeholder="Contoh: Warkop Sabar" class="w-full bg-white border border-amber-200 rounded-xl p-2.5 text-xs text-domino-black font-semibold">
+              <datalist id="location-options">${this.knownLocations().map(l => `<option value="${this.attr(l)}"></option>`).join('')}</datalist>
+              <p class="text-[10px] text-amber-800/70 mt-1">Opsional. Grafik di Dashboard dikelompokkan per lokasi.</p>
+            </div>
+            <div class="mb-4">
               <label class="block text-xs font-black text-amber-950 mb-1">Catatan</label>
               <textarea id="new-ses-notes" rows="2" placeholder="Catatan tambahan..." class="w-full bg-white border border-amber-200 rounded-xl p-2.5 text-xs text-domino-black font-medium"></textarea>
             </div>
@@ -1812,6 +1922,11 @@ class DominoLeagueApp {
               <input type="text" id="edit-ses-label" value="${this.attr(s.session_label)}" maxlength="80" required class="w-full bg-white border border-amber-200 rounded-xl p-2.5 text-xs text-domino-black font-semibold">
             </div>
             <div class="mb-4">
+              <label class="block text-xs font-black text-amber-950 mb-1">Lokasi / Tempat Nongkrong</label>
+              <input type="text" id="edit-ses-location" list="location-options" value="${this.attr(s.location || '')}" maxlength="60" placeholder="Contoh: Warkop Sabar" class="w-full bg-white border border-amber-200 rounded-xl p-2.5 text-xs text-domino-black font-semibold">
+              <datalist id="location-options">${this.knownLocations().map(l => `<option value="${this.attr(l)}"></option>`).join('')}</datalist>
+            </div>
+            <div class="mb-4">
               <label class="block text-xs font-black text-amber-950 mb-1">Keterangan / Catatan</label>
               <textarea id="edit-ses-notes" rows="3" maxlength="200" class="w-full bg-white border border-amber-200 rounded-xl p-2.5 text-xs text-domino-black font-medium">${this.esc(s.notes || '')}</textarea>
             </div>
@@ -1831,6 +1946,7 @@ class DominoLeagueApp {
     if (!label) { alert('Nama sesi wajib diisi.'); return; }
     const res = await this.cmd('edit_session', {
       session_id: sessionId, label,
+      location: (document.getElementById('edit-ses-location')?.value || '').trim(),
       date: document.getElementById('edit-ses-date')?.value,
       notes: document.getElementById('edit-ses-notes')?.value || ''
     });
@@ -1863,6 +1979,16 @@ class DominoLeagueApp {
     this.openForceModal();
   }
 
+  // Lokasi yang pernah dipakai (untuk saran isian, agar penulisannya seragam)
+  knownLocations() {
+    const seen = new Map();
+    (this.state.sessions || []).forEach(x => {
+      const l = String(x.location || '').trim().replace(/\s+/g, ' ');
+      if (l && !seen.has(l.toLowerCase())) seen.set(l.toLowerCase(), l);
+    });
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }
+
   async handleCreateSession(e) {
     e.preventDefault();
     if (this.guardLocked()) return;
@@ -1870,6 +1996,7 @@ class DominoLeagueApp {
       season_id: this.state.current_season_id,
       date: document.getElementById('new-ses-date')?.value,
       label: (document.getElementById('new-ses-label')?.value || '').trim(),
+      location: (document.getElementById('new-ses-location')?.value || '').trim(),
       notes: document.getElementById('new-ses-notes')?.value || ''
     });
     if (!res.ok) { this.showError(res); return; }
@@ -2876,9 +3003,9 @@ class DominoLeagueApp {
     this.state.players.forEach(p => { csv += row([p.player_id, p.display_name, p.is_active ? 'Aktif' : 'Nonaktif']); });
 
     csv += '\n' + row(['=== 03 DATA SESI ===']);
-    csv += row(['Session ID', 'Tanggal', 'Label', 'Status', 'Catatan']);
+    csv += row(['Session ID', 'Tanggal', 'Label', 'Lokasi', 'Status', 'Catatan']);
     this.state.sessions.filter(s => s.season_id === seasonId).forEach(s => {
-      csv += row([s.session_id, s.session_date, s.session_label, s.status, s.notes]);
+      csv += row([s.session_id, s.session_date, s.session_label, s.location || '', s.status, s.notes]);
     });
 
     csv += '\n' + row(['=== 04 PERTANDINGAN ===']);

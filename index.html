@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Domino League - Klasemen & Statistik Gaple</title>
+  <title>Domino League - Klasemen & Statistik Domino</title>
   
   <!-- Favicon Domino Logo (Tab Browser) -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -97,6 +97,31 @@
       }
     }
   </style>
+  <style id="sidebar-styles">
+    /* Menu samping: laci geser di layar sempit (HP), bisa disembunyikan di layar lebar */
+    .menu-open-btn { display: none; width: 2.5rem; height: 2.5rem; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 9999px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; cursor: pointer; }
+    .menu-open-btn:hover { background: #fef3c7; }
+    .sidebar-backdrop { display: none; }
+    @media (max-width: 1023px) {
+      .menu-open-btn { display: inline-flex; }
+      .app-sidebar {
+        position: fixed !important; top: 0; bottom: 0; left: 0; z-index: 50;
+        width: min(86vw, 320px) !important; max-width: 100%;
+        overflow-y: auto; overscroll-behavior: contain;
+        border-radius: 0 28px 28px 0 !important;
+        transform: translateX(-110%); visibility: hidden;
+        transition: transform .25s ease, visibility 0s linear .25s;
+      }
+      body.menu-open .app-sidebar { transform: translateX(0); visibility: visible; transition: transform .25s ease, visibility 0s; }
+      body.menu-open .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 40; background: rgba(28, 25, 23, .5); }
+      body.menu-open { overflow: hidden; }
+    }
+    @media (min-width: 1024px) {
+      body.menu-collapsed .app-sidebar { display: none !important; }
+      body.menu-collapsed .menu-open-btn { display: inline-flex; }
+    }
+    @media (prefers-reduced-motion: reduce) { .app-sidebar { transition: none !important; } }
+  </style>
   <style id="mvp-styles">
     /* Karakter MVP: melompat gembira, lengan melambai, konfeti jatuh */
     .mvp-svg { overflow: visible; }
@@ -128,12 +153,13 @@
   </style>
 </head>
 <body class="bg-domino-bg min-h-screen p-2.5 sm:p-5 lg:p-7 flex flex-col justify-between selection:bg-domino-red selection:text-white">
+  <div class="sidebar-backdrop" onclick="app.closeSidebar()" aria-hidden="true"></div>
 
   <!-- MAIN APP CONTAINER -->
   <div class="max-w-[1600px] w-full mx-auto flex flex-col lg:flex-row gap-5 items-stretch">
     
     <!-- LEFT SIDEBAR (Domino ACBC Theme) -->
-    <aside class="w-full lg:w-64 xl:w-72 bg-white rounded-[28px] p-6 shadow-card border border-domino-border flex flex-col justify-between shrink-0">
+    <aside id="app-sidebar" class="app-sidebar w-full lg:w-64 xl:w-72 bg-white rounded-[28px] p-6 shadow-card border border-domino-border flex flex-col justify-between shrink-0">
       <div>
         <!-- Brand Logo Row (Iconic Domino Tile & ACBC Brand) -->
         <div class="flex items-center justify-between pb-6 border-b border-amber-100">
@@ -163,7 +189,7 @@
             </div>
           </div>
 
-          <button id="btn-toggle-menu" class="w-8 h-8 rounded-full hover:bg-amber-50 flex items-center justify-center text-slate-400 hover:text-amber-800 transition">
+          <button id="btn-toggle-menu" type="button" aria-label="Sembunyikan menu" title="Sembunyikan menu" aria-controls="app-sidebar" aria-expanded="true" class="w-8 h-8 rounded-full hover:bg-amber-50 flex items-center justify-center text-slate-400 hover:text-amber-800 transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
           </button>
         </div>
@@ -287,6 +313,9 @@
       <header class="bg-white rounded-[26px] p-4 sm:p-5 shadow-card border border-domino-border flex flex-wrap items-center justify-between gap-4">
         <!-- Title & Subtitle -->
         <div class="flex items-center gap-4">
+          <button id="btn-open-menu" type="button" class="menu-open-btn" onclick="app.toggleSidebar()" aria-label="Buka menu" title="Menu" aria-controls="app-sidebar" aria-expanded="false">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+          </button>
           <div>
             <div class="flex items-center gap-2.5">
               <h2 id="top-view-title" class="text-2xl font-black text-domino-black tracking-tight">Dashboard</h2>

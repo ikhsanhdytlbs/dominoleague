@@ -465,7 +465,7 @@ COMMANDS.add_session = ctx => {
   assertUnlocked(season.season_id);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(p.date || '')) ? p.date : new Date().toISOString().slice(0, 10);
   const id = nextId('SES', db.sessions, 'session_id', 3);
-  db.sessions.push({ session_id: id, season_id: season.season_id, session_date: date, session_label: clean(p.label, 80), status: 'active', notes: clean(p.notes, 200) });
+  db.sessions.push({ session_id: id, season_id: season.season_id, session_date: date, session_label: clean(p.label, 80), location: clean(p.location, 60), status: 'active', notes: clean(p.notes, 200) });
   audit(ctx, { action: 'add_session', summary: `${ctx.actor} membuat sesi ${id}` });
   return { data: { session_id: id } };
 };
@@ -478,14 +478,17 @@ COMMANDS.edit_session = ctx => {
   if (!label) fail(400, 'BAD_LABEL', 'Nama sesi wajib diisi.');
   const date = /^\d{4}-\d{2}-\d{2}$/.test(String(p.date || '')) ? p.date : s.session_date;
   const notes = clean(p.notes, 200);
+  // Klien lama tidak mengirim lokasi: biarkan yang sudah ada
+  const location = ('location' in p) ? clean(p.location, 60) : (s.location || '');
   const changes = [];
   if (label !== s.session_label) changes.push(`nama "${s.session_label || '-'}" → "${label}"`);
   if (date !== s.session_date) changes.push(`tanggal ${s.session_date} → ${date}`);
   if (notes !== (s.notes || '')) changes.push('catatan');
+  if (location !== (s.location || '')) changes.push(`lokasi "${s.location || '-'}" → "${location || '-'}"`);
   if (!changes.length) return {};
-  const before = { label: s.session_label, date: s.session_date, notes: s.notes || '' };
-  s.session_label = label; s.session_date = date; s.notes = notes;
-  audit(ctx, { action: 'edit_session', summary: `${ctx.actor} mengubah sesi ${s.session_id}: ${changes.join(', ')}`, details: { before, after: { label, date, notes } } });
+  const before = { label: s.session_label, date: s.session_date, notes: s.notes || '', location: s.location || '' };
+  s.session_label = label; s.session_date = date; s.notes = notes; s.location = location;
+  audit(ctx, { action: 'edit_session', summary: `${ctx.actor} mengubah sesi ${s.session_id}: ${changes.join(', ')}`, details: { before, after: { label, date, notes, location } } });
   return {};
 };
 

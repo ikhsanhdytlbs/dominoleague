@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
-const files = ['mvp', 'server', 'sessions', 'initial-data', 'client-login', 'client-features', 'keys'];
+const files = ['mvp', 'server', 'sessions', 'initial-data', 'client-login', 'client-features', 'dashboard', 'keys'];
 let failed = 0;
 const sync = spawnSync('node', ['scripts/sync-supabase.mjs', '--check'], { cwd: root, encoding: 'utf8' });
 console.log((sync.status === 0 ? 'OK   ' : 'GAGAL') + ' file bersama supabase/functions/_shared ' + (sync.status === 0 ? 'sinkron' : 'TIDAK sinkron (jalankan: npm run sync)'));

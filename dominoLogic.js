@@ -618,3 +618,66 @@ export function calculateDailyMVP(seasonId, date, players, matches, sessions, lo
   result.mvp = qualified[0] || null;
   return result;
 }
+
+
+const byDate = (a, b) => String(a.session_date || '').localeCompare(String(b.session_date || '')) || String(a.session_id).localeCompare(String(b.session_id));
+const tidy = v => String(v || '').trim().replace(/\s+/g, ' ');
+
+/**
+ * Data grafik "Aktivitas": jumlah game per TEMPAT nongkrong.
+ * - Bila ada sesi yang punya lokasi: satu batang per lokasi (sesi tanpa lokasi digabung di "Tanpa lokasi").
+ * - Bila belum ada lokasi sama sekali: satu batang per sesi.
+ * Jumlah batang mengikuti data (2 lokasi = 2 batang); paling banyak `maxBars` yang terbaru.
+ */
+export function groupActivityByLocation(sessions, matches, maxBars = 7) {
+  if (!sessions || !sessions.length) return { mode: 'empty', bars: [], total: 0, hasLocationData: false };
+  const gamesOf = id => matches.filter(m => m.session_id === id).length;
+  const sorted = [...sessions].sort(byDate);
+  const hasLoc = sorted.some(s => tidy(s.location));
+  let bars;
+  if (hasLoc) {
+    const map = new Map();
+    sorted.forEach(s => {
+      const name = tidy(s.location) || 'Tanpa lokasi';
+      const key = name.toLowerCase();
+      if (!map.has(key)) map.set(key, { key, label: name, games: 0, sessions: 0, active: false, last: '' });
+      const b = map.get(key);
+      b.games += gamesOf(s.session_id);
+      b.sessions++;
+      if (s.status === 'active') b.active = true;
+      b.last = String(s.session_date || b.last);
+    });
+    bars = [...map.values()].sort((a, b) => a.last.localeCompare(b.last));
+    // Sesi lama tanpa lokasi yang masih kosong tidak perlu jadi batang sendiri; yang berisi game tetap ditampilkan
+    const withoutEmptyUnknown = bars.filter(b => !(b.key === 'tanpa lokasi' && b.games === 0));
+    if (withoutEmptyUnknown.length) bars = withoutEmptyUnknown;
+  } else {
+    bars = sorted.map(s => ({
+      key: s.session_id, label: tidy(s.session_label) || s.session_date || s.session_id,
+      games: gamesOf(s.session_id), sessions: 1, active: s.status === 'active', last: String(s.session_date || '')
+    }));
+  }
+  return { mode: hasLoc ? 'location' : 'session', bars: bars.slice(-maxBars), total: bars.length, hasLocationData: hasLoc };
+}
+
+/**
+ * Tren Performance Index sang pemuncak: nilai PI-nya sesudah tiap sesi (kumulatif, hanya sesi yang punya game).
+ * pi = null bila pada saat itu belum ada pembanding (kurang dari 2 pemain yang memenuhi syarat juara).
+ */
+export function leaderTrend(seasonId, leaderId, players, sessions, matches, lossEvents, specialEvents, settings, maxPoints = 7) {
+  const withGames = sessions
+    .filter(s => s.season_id === seasonId && matches.some(m => m.session_id === s.session_id))
+    .sort(byDate);
+  const points = withGames.map((s, i) => {
+    const ids = new Set(withGames.slice(0, i + 1).map(x => x.session_id));
+    const upTo = matches.filter(m => m.season_id === seasonId && ids.has(m.session_id));
+    const st = calculateSeasonStats(seasonId, players, upTo, lossEvents, specialEvents, settings).playerStats;
+    const eligible = st.filter(p => p.eligible_champion).length;
+    const me = st.find(p => p.player_id === leaderId);
+    return {
+      session_id: s.session_id, date: String(s.session_date || ''), label: tidy(s.session_label) || String(s.session_date || ''),
+      pi: me && me.eligible_champion && eligible >= 2 ? me.performance_index : null
+    };
+  });
+  return points.slice(-maxPoints);
+}

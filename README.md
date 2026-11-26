@@ -123,6 +123,14 @@ Sheet yang dibuat otomatis: `01_Dashboard_Leaderboard`, `02_Data_Pemain`, `03_Da
 ## 🌟 Fitur
 
 1. **Dashboard & Klasemen Performance Index** (persentil Ratus, Ribu, dan Kalah).
+   * Semua kartu dashboard **murni dari data**, tanpa angka contoh. Kartu **Dominasi Klasemen** menampilkan pemuncak
+     sebenarnya (Performance Index, Ratus Rate, Ribu Rate, Loss Control) dan grafik tren PI per sesi. Bila belum ada game,
+     atau belum ada pemain yang memenuhi syarat juara, kartu menyatakannya dengan jelas (tanda "—"), bukan angka palsu.
+   * Kartu **Aktivitas** menghitung game per **lokasi nongkrong**: dua lokasi berarti dua batang, tiga lokasi tiga batang.
+     Isi kolom **Lokasi** saat membuat atau mengubah sesi; penulisan berbeda huruf besar/kecil digabung. Selama belum ada
+     lokasi, batangnya per sesi.
+   * **Menu samping** bisa disembunyikan: di HP menjadi laci yang dibuka dengan tombol ☰ (tutup dengan mengetuk latar gelap,
+     Esc, atau memilih menu); di layar lebar tombol panah menyembunyikannya dan pilihan itu diingat.
    * Kartu **MVP Hari Ini** (dengan karakter domino yang melompat kegirangan) menampilkan pemain dengan skor terbaik
      pada hari itu. Skor memakai rumus Performance Index liga yang sama, tetapi hanya dari game pada hari itu, dan
      pemain harus main minimal 3 game (atau sebanyak game terbanyak bila hari itu lebih sedikit). Bila hari ini belum
